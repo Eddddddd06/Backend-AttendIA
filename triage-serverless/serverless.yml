@@ -179,7 +179,7 @@ functions:
   ClasificarTicket:
     handler: src/tickets/clasificar_ticket.lambda_handler
     environment:
-      GROQ_API_KEY: "tu_api_key_real_de_groq_aqui" # 🌟 REEMPLAZA ESTO con tu API Key real de Groq
+      GROQ_API_KEY: ${env:GROQ_API_KEY} # 🌟 REEMPLAZA ESTO con tu API Key real de Groq
     events:
       - sqs:
           arn: !GetAtt TicketsQueue.Arn
