@@ -1,76 +1,337 @@
 service: triage-serverless
 
+frameworkVersion: '4'
+
+plugins:
+  - serverless-python-requirements
+
 provider:
   name: aws
   runtime: python3.9
-  stage: ${opt:stage, 'dev'}
   region: us-east-1
-
-  # Variables de entorno globales para todas las Lambdas
+  stage: dev
   environment:
+    DYNAMODB_USUARIOS_TABLE: t_usuarios
+    DYNAMODB_TOKENS_TABLE: t_tokens_acceso
     DYNAMODB_TICKETS_TABLE: t_tickets
+    SQS_QUEUE_URL: !Ref TicketsQueue
     SERVICE_NAME: ${self:service}
     STAGE: ${self:provider.stage}
 
-  # Permisos globales de IAM para las funciones
+  # Rol administrado de AWS Academy Lab que hereda todos los permisos necesarios
   iam:
-    role:
-      statements:
-        # Permisos para que las Lambdas lean/escriban en tu tabla de DynamoDB e Índices
-        - Effect: Allow
-          Action:
-            - dynamodb:Query
-            - dynamodb:Scan
-            - dynamodb:GetItem
-            - dynamodb:PutItem
-            - dynamodb:UpdateItem
-          Resource:
-            - arn:aws:dynamodb:${self:provider.region}:*:table/t_tickets
-            - arn:aws:dynamodb:${self:provider.region}:*:table/t_tickets/index/*
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
 
-        # Permiso para que un Lambda pueda invocar a otro de manera síncrona o asíncrona
-        - Effect: Allow
-          Action:
-            - lambda:InvokeFunction
-          Resource: "arn:aws:lambda:${self:provider.region}:*:function:${self:service}-${self:provider.stage}-*"
+custom:
+  pythonRequirements:
+    dockerizePip: true
 
 functions:
+  # ─────────────────────────────────────────────────────────────────────────
+  # AUTH & USUARIOS
+  # ─────────────────────────────────────────────────────────────────────────
 
-  # 1. Tu Lambda de Validación de Accesos (el escudo de seguridad)
-  ValidarTokenAcceso:
-    handler: src/auth/validar_token.lambda_handler # Asegúrate de que apunte a tu archivo real
-
-  # 2. Tu Lambda de Clasificación Inteligente (la que usa Groq / SQS)
-  ClasificarTicket:
-    handler: src/tickets/clasificar_ticket.lambda_handler
-    # Si esta función se gatilla por SQS, aquí iría su respectivo bloque 'events'
-
-  # 3. La función de Obtener Tickets que revisamos (con Filtro por GSI y PK)
-  ObtenerTickets:
-    handler: src/tickets/obtener_tickets.lambda_handler # Reemplaza con la ruta de este archivo
+  # PÚBLICO para Admin / PRIVADO para creación de Empleados
+  CrearUsuario:
+    handler: src/auth/crear_usuario.lambda_handler
     events:
       - http:
-          path: tickets
-          method: get
-          cors: true
-
-  # 4. La función de Resolver Ticket (la que cambia el estado y dispara el correo)
-  ResolverTicket:
-    handler: src/tickets/resolver_ticket.lambda_handler # Reemplaza con la ruta de este archivo
-    events:
-      - http:
-          path: tickets/resolver
+          path: /auth/usuarios
           method: post
           cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
 
-  # 5. El NUEVO Lambda asíncrono que envía los correos mediante AWS SES
+  # Público: Login de Admin o Empleado → retorna token
+  LoginUsuario:
+    handler: src/auth/login_usuario.lambda_handler
+    events:
+      - http:
+          path: /auth/login
+          method: post
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # PRIVADO: Destruye la sesión e invalida el token
+  LogoutUsuario:
+    handler: src/auth/logout.lambda_handler
+    events:
+      - http:
+          path: /auth/logout
+          method: post
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # Interna: Solo se invoca lambda-to-lambda, pero exponemos endpoint para tests
+  ValidarTokenAcceso:
+    handler: src/auth/validar_token.lambda_handler
+    events:
+      - http:
+          path: /auth/validar
+          method: post
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # PRIVADO: El admin actualiza sus áreas (Bloquea borrado si hay empleados activos)
+  ActualizarAreas:
+    handler: src/auth/actualizar_areas.lambda_handler
+    events:
+      - http:
+          path: /auth/empresas/areas
+          method: put
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # PRIVADO: El admin modifica área y/o contraseña de un empleado
+  ActualizarUsuario:
+    handler: src/auth/actualizar_usuario.lambda_handler
+    events:
+      - http:
+          path: /auth/usuarios/modificar
+          method: put
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # TICKETS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # PRIVADO: El Admin carga tickets masivos desde un CSV convertido a JSON array
+  CargarCsv:
+    handler: src/tickets/cargar_csv.lambda_handler
+    events:
+      - http:
+          path: /tickets/csv
+          method: post
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # PRIVADO SQS: Clasificación automática mediante IA, disparada por la cola
+  ClasificarTicket:
+    handler: src/tickets/clasificar_ticket.lambda_handler
+    environment:
+      GROQ_API_KEY: ${env.GROQ_API_KEY} # 🌟 Reemplaza con tu API Key real de Groq directamente aquí
+    events:
+      - sqs:
+          arn: !GetAtt TicketsQueue.Arn
+          batchSize: 1 
+
+  # PRIVADO: El Empleado/Admin consulta los tickets de su área
+  ObtenerTickets:
+    handler: src/tickets/obtener_tickets.lambda_handler
+    events:
+      - http:
+          path: /tickets
+          method: get
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body,
+                  "queryStringParameters": {
+                    "tenant_area": "$input.params('tenant_area')",
+                    "tenant_id": "$input.params('tenant_id')"
+                  }
+                }
+
+  # PRIVADO: El Empleado/Admin resuelve un ticket
+  ResolverTicket:
+    handler: src/tickets/resolver_ticket.lambda_handler
+    events:
+      - http:
+          path: /tickets/{ticket_id}/resolver
+          method: put
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body,
+                  "pathParameters": {
+                    "ticket_id": "$input.params('ticket_id')"
+                  }
+                }
+
+  # 🌟 NUEVA FUNCIÓN AGREGADA DE MANERA CORRECTA
   EnviarCorreoNotificacion:
     handler: src/notificaciones/enviar_email.lambda_handler
     environment:
-      SENDER_EMAIL: "tu_correo_verificado@gmail.com" # ⚠️ CAMBIA ESTO por tu correo verificado en SES
-    iamRoleStatements:
-      - Effect: Allow
-        Action:
-          - ses:SendEmail
-          - ses:SendRawEmail
-        Resource: "*"
+      RESEND_API_KEY: ${env.RESEND_API_KEY} # ⚠️ Reemplaza con tu token seguro de Resend
+
+resources:
+  Resources:
+    # ─── DYNAMODB: Usuarios ───────────────────────────────────────────────
+    TablaUsuarios:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: t_usuarios
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: tenant_id
+            AttributeType: S
+          - AttributeName: correo
+            AttributeType: S
+          - AttributeName: rol
+            AttributeType: S
+        KeySchema:
+          - AttributeName: tenant_id
+            KeyType: HASH
+          - AttributeName: correo
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: RolIndex
+            KeySchema:
+              - AttributeName: rol
+                KeyType: HASH
+              - AttributeName: tenant_id
+                KeyType: RANGE
+            Projection:
+              ProjectionType: INCLUDE
+              NonKeyAttributes:
+                - nombre_empresa
+                - areas
+                - correo
+                - area          
+
+    # ─── DYNAMODB: Tokens ─────────────────────────────────────────────────
+    TablaTokensAcceso:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: t_tokens_acceso
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: token
+            AttributeType: S
+        KeySchema:
+          - AttributeName: token
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+    # ─── DYNAMODB: Tickets ────────────────────────────────────────────────
+    TablaTickets:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: t_tickets
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: tenant_id
+            AttributeType: S
+          - AttributeName: ticket_id
+            AttributeType: S
+          - AttributeName: tenant_area
+            AttributeType: S
+          - AttributeName: score
+            AttributeType: N
+        KeySchema:
+          - AttributeName: tenant_id
+            KeyType: HASH
+          - AttributeName: ticket_id
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: AreaScoreIndex
+            KeySchema:
+              - AttributeName: tenant_area
+                KeyType: HASH
+              - AttributeName: score
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    # ─── SQS: Cola de tickets ─────────────────────────────────────────────
+    TicketsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: TicketsQueue
+        VisibilityTimeout: 60
+        MessageRetentionPeriod: 86400  # 24 horas de retención
