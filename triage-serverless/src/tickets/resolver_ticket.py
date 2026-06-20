@@ -6,10 +6,13 @@ from datetime import datetime, timezone
 # 🛠️ Buenas prácticas: Clientes globales para optimizar recursos
 dynamodb = boto3.resource('dynamodb')
 lambda_client = boto3.client('lambda')
+sns_client = boto3.client('sns') # 🌟 Agregamos cliente nativo de SNS
 
 TABLE_TICKETS = os.environ.get('DYNAMODB_TICKETS_TABLE', 't_tickets')
 SERVICE_NAME = os.environ.get('SERVICE_NAME', 'triage-serverless')
 STAGE = os.environ.get('STAGE', 'dev')
+# 🌟 Variable de entorno que guardará el ARN del Tópico SNS
+TICKETS_TOPIC_ARN = os.environ.get('TICKETS_SNS_TOPIC_ARN')
 
 
 def lambda_handler(event, context):
@@ -109,28 +112,28 @@ def lambda_handler(event, context):
 
         print(f"[OK] resolver_ticket - Ticket {ticket_id} del tenant {tenant_id} resuelto.")
 
-        # ── Inicio: Disparo Asíncrono del Correo ────────────────────────
+        # ── Inicio: Publicación Orientada a Eventos en SNS ────────────────────────
         if correo_emisor:
-            payload_correo = {
+            payload_evento = {
                 "to_email": correo_emisor,
                 "subject": f"Tu ticket #{ticket_id[:8]} ha sido resuelto",
                 "body_content": f"Hola {nombre_emisor},\n\nTe informamos que tu ticket de soporte con ID {ticket_id} ha sido resuelto por nuestro equipo de atención.\n\nGracias por tu paciencia.\n\nSaludos cordiales."
             }
             
             try:
-                # 🚀 InvocationType='Event' lo hace asíncrono (Fire and Forget)
-                lambda_client.invoke(
-                    FunctionName=f"{SERVICE_NAME}-{STAGE}-EnviarCorreoNotificacion", 
-                    InvocationType='Event',
-                    Payload=json.dumps(payload_correo)
+                # 🚀 Publicamos el mensaje en el canal común (Tópico SNS)
+                sns_client.publish(
+                    TopicArn=TICKETS_TOPIC_ARN,
+                    Message=json.dumps(payload_evento),
+                    Subject="TicketResueltoEvento"
                 )
-                print(f"[INFO] Gatillado asíncrono de correo enviado a {correo_emisor}")
-            except Exception as mail_err:
-                # Si falla el trigger del correo, no tumbamos la transacción principal del usuario
-                print(f"[WARNING] No se pudo gatillar el Lambda de correo: {mail_err}")
+                print(f"[INFO] Evento de resolución publicado exitosamente en SNS para: {correo_emisor}")
+            except Exception as sns_err:
+                # El negocio no se frena si la mensajería externa tiene demoras
+                print(f"[WARNING] No se pudo publicar el evento en SNS: {sns_err}")
         else:
-            print("[WARNING] No se encontró un campo de correo válido ('Contacto', 'correo', o 'email') en el ticket para notificar.")
-        # ── Fin: Disparo Asíncrono del Correo ───────────────────────────
+            print("[WARNING] No se encontró correo para lanzar el evento de notificación.")
+        # ── Fin: Publicación Orientada a Eventos en SNS ───────────────────────────
 
         return {
             'statusCode': 200,

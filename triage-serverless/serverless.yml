@@ -219,33 +219,39 @@ functions:
 
   # PRIVADO: El Empleado/Admin resuelve un ticket
   ResolverTicket:
-    handler: src/tickets/resolver_ticket.lambda_handler
-    events:
-      - http:
-          path: /tickets/{ticket_id}/resolver
-          method: put
-          cors: true
-          integration: lambda
-          request:
-            template:
-              application/json: |
-                {
-                  "method": "$context.httpMethod",
-                  "path": "$context.path",
-                  "headers": {
-                    "Authorization": "$input.params('Authorization')"
-                  },
-                  "body": $input.body,
-                  "pathParameters": {
-                    "ticket_id": "$input.params('ticket_id')"
+      handler: src/tickets/resolver_ticket.lambda_handler
+      environment:
+        TICKETS_SNS_TOPIC_ARN: !Ref TicketsResueltosTopic # 🌟 Le inyectamos el ARN del Tópico creado abajo
+      events:
+        - http:
+            path: /tickets/{ticket_id}/resolver
+            method: put
+            cors: true
+            integration: lambda
+            request:
+              template:
+                application/json: |
+                  {
+                    "method": "$context.httpMethod",
+                    "path": "$context.path",
+                    "headers": {
+                      "Authorization": "$input.params('Authorization')"
+                    },
+                    "body": $input.body,
+                    "pathParameters": {
+                      "ticket_id": "$input.params('ticket_id')"
+                    }
                   }
-                }
 
   # 🌟 NUEVA FUNCIÓN AGREGADA DE MANERA CORRECTA
   EnviarCorreoNotificacion:
-    handler: src/notificaciones/enviar_email.lambda_handler
-    environment:
-      RESEND_API_KEY: ${env.RESEND_API_KEY} # ⚠️ Reemplaza con tu token seguro de Resend
+      handler: src/tickets/enviar_email.lambda_handler
+      environment:
+        RESEND_API_KEY: ${RESEND_API_KEY} # Tu token de Resend
+      events:
+        - sns:
+            arn: !Ref TicketsResueltosTopic # 🌟 Serverless Framework la suscribe al tópico automáticamente
+            topicName: TicketsResueltosTopic
 
 resources:
   Resources:
@@ -335,3 +341,7 @@ resources:
         QueueName: TicketsQueue
         VisibilityTimeout: 60
         MessageRetentionPeriod: 86400  # 24 horas de retención
+    TicketsResueltosTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: TicketsResueltosTopic
