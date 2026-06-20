@@ -183,7 +183,7 @@ functions:
   ClasificarTicket:
     handler: src/tickets/clasificar_ticket.lambda_handler
     environment:
-      GROQ_API_KEY: ${env.GROQ_API_KEY} # 🌟 Reemplaza con tu API Key real de Groq directamente aquí
+      GROQ_API_KEY: ${env:GROQ_API_KEY} # 🌟 Reemplaza con tu API Key real de Groq directamente aquí
     events:
       - sqs:
           arn: !GetAtt TicketsQueue.Arn
@@ -244,7 +244,7 @@ functions:
   EnviarCorreoNotificacion:
       handler: src/tickets/enviar_email.lambda_handler
       environment:
-        RESEND_API_KEY: ${env.RESEND_API_KEY} # Tu token de Resend
+        RESEND_API_KEY: ${env:RESEND_API_KEY} # Tu token de Resend
       events:
         - sns:
             arn: !Ref TicketsResueltosTopic # 🌟 Serverless Framework la suscribe al tópico automáticamente
