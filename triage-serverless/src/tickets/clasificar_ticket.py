@@ -94,7 +94,7 @@ def lambda_handler(event, context):
                     )
 
                     chat_completion = client_groq.chat.completions.create(
-                        model="openai/gpt-oss-20b",
+                        model="llama-3.1-8b-instant",
                         messages=[
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt}
