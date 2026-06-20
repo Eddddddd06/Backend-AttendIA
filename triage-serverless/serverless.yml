@@ -15,6 +15,7 @@ provider:
     SERVICE_NAME: ${self:service}
     STAGE: ${self:provider.stage}
 
+  # Rol administrado de AWS Academy Lab que hereda todos los permisos necesarios
   iam:
     role: arn:aws:iam::${aws:accountId}:role/LabRole
 
@@ -153,16 +154,7 @@ functions:
   # TICKETS
   # ─────────────────────────────────────────────────────────────────────────
 
-  # PÚBLICO: El cliente final envía su queja sin token
-  CrearTicket:
-    handler: src/tickets/crear_ticket.lambda_handler
-    events:
-      - http:
-          path: /tickets
-          method: post
-          cors: true
-
-  # PRIVADO: El Admin carga tickets masivos desde un CSV
+  # PRIVADO: El Admin carga tickets masivos desde un CSV convertido a JSON array
   CargarCsv:
     handler: src/tickets/cargar_csv.lambda_handler
     events:
@@ -183,13 +175,15 @@ functions:
                   "body": $input.body
                 }
 
-  # PRIVADO SQS: Clasificación automática, disparada por la cola
+  # PRIVADO SQS: Clasificación automática mediante IA, disparada por la cola
   ClasificarTicket:
     handler: src/tickets/clasificar_ticket.lambda_handler
+    environment:
+      GROQ_API_KEY: "tu_api_key_real_de_groq_aqui" # 🌟 REEMPLAZA ESTO con tu API Key real de Groq
     events:
       - sqs:
           arn: !GetAtt TicketsQueue.Arn
-          batchSize: 1
+          batchSize: 1 # 🌟 Crucial para que procese un solo ticket por ejecución de IA de forma controlada
 
   # PRIVADO: El Empleado/Admin consulta los tickets de su área
   ObtenerTickets:
@@ -273,7 +267,7 @@ resources:
                 - nombre_empresa
                 - areas
                 - correo
-                - area          # 🌟 SOLUCIÓN: Agregado para que no falle el barrido de áreas
+                - area          # 🌟 Solución para el barrido nativo de áreas asignadas
 
     # ─── DYNAMODB: Tokens ─────────────────────────────────────────────────
     TablaTokensAcceso:
@@ -327,4 +321,4 @@ resources:
       Properties:
         QueueName: TicketsQueue
         VisibilityTimeout: 60
-        MessageRetentionPeriod: 86400  # 24 horas
+        MessageRetentionPeriod: 86400  # 24 horas de retención de mensajes de respaldo
