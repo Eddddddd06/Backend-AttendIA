@@ -15,19 +15,8 @@ provider:
     SERVICE_NAME: ${self:service}
     STAGE: ${self:provider.stage}
 
-  iamRoleStatements:
-    - Effect: "Allow"
-      Action:
-        - "dynamodb:*"
-      Resource: "*"
-    - Effect: "Allow"
-      Action:
-        - "sqs:*"
-      Resource: "*"
-    - Effect: "Allow"
-      Action:
-        - "lambda:InvokeFunction"
-      Resource: "*"
+  iam:
+    role: arn:aws:iam::943641746965:role/LabRole
 
 functions:
   # ─────────────────────────────────────────────────────────────────────────
