@@ -2,6 +2,9 @@ service: triage-serverless
 
 frameworkVersion: '4'
 
+plugins:
+  - serverless-python-requirements
+
 provider:
   name: aws
   runtime: python3.9
@@ -18,6 +21,10 @@ provider:
   # Rol administrado de AWS Academy Lab que hereda todos los permisos necesarios
   iam:
     role: arn:aws:iam::${aws:accountId}:role/LabRole
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
 
 functions:
   # ─────────────────────────────────────────────────────────────────────────
