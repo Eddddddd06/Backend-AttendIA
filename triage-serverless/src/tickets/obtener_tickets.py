@@ -3,7 +3,10 @@ import json
 import os
 from decimal import Decimal
 
+# Los clientes se inicializan ARRIBA (Globales) para optimizar velocidad
 dynamodb = boto3.resource('dynamodb')
+lambda_client = boto3.client('lambda') 
+
 TABLE_TICKETS = os.environ.get('DYNAMODB_TICKETS_TABLE', 't_tickets')
 SERVICE_NAME = os.environ.get('SERVICE_NAME', 'triage-serverless')
 STAGE = os.environ.get('STAGE', 'dev')
@@ -18,24 +21,19 @@ class DecimalEncoder(json.JSONEncoder):
 
 
 def lambda_handler(event, context):
-    """
-    PRIVADO - Requiere token válido.
-    El Empleado o Admin consulta los tickets de su área o de su empresa.
-
-    Parámetros (query string o body):
-        tenant_area  - (Prioritario) Ej: "empresa1#Ventas" → filtra por área
-        tenant_id    - (Alternativo) Devuelve todos los tickets del tenant
-    """
     try:
-        # ── Inicio: Proteger el Lambda ──────────────────────────────────
+        # ── Inicio: Proteger el Lambda (Seguro contra inyecciones) ─────
         token = event.get('headers', {}).get('Authorization', '')
-        lambda_client = boto3.client('lambda')
-        payload_string = '{ "token": "' + token + '" }'
+        
+        # json.dumps evita que rompan el formato del payload
+        payload_data = { "token": token }
+        
         invoke_response = lambda_client.invoke(
             FunctionName=f"{SERVICE_NAME}-{STAGE}-ValidarTokenAcceso",
             InvocationType='RequestResponse',
-            Payload=payload_string
+            Payload=json.dumps(payload_data)
         )
+        
         response = json.loads(invoke_response['Payload'].read())
         if response.get('statusCode') == 403:
             return {
@@ -75,7 +73,7 @@ def lambda_handler(event, context):
                 ScanIndexForward=False  # score descendente (más urgente primero)
             )
         else:
-            # Query por PK principal → todos los tickets del tenant
+            # Query por PK principal (Asumiendo que tenant_id es la partición principal de tu tabla)
             result = tabla_tickets.query(
                 KeyConditionExpression='tenant_id = :tid',
                 ExpressionAttributeValues={':tid': tenant_id}
