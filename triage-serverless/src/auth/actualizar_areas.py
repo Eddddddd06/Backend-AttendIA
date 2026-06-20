@@ -10,12 +10,11 @@ STAGE = os.environ.get('STAGE', 'dev')
 
 def lambda_handler(event, context):
     """
-    PRIVADO - Requiere token válido (Idealmente validado que es Admin en el frontend o aquí).
+    PRIVADO - Requiere token válido de Administrador.
     Permite al Admin actualizar el catálogo de áreas de su empresa.
+    Previene la eliminación de áreas que tengan empleados asignados activos.
 
     Body requerido:
-        tenant_id  - ID de la empresa
-        correo     - Correo del admin (PK secundaria para actualizar el registro exacto)
         areas      - Lista de strings, ej: ["Ventas", "Soporte Técnico", "Cobranzas"]
     """
     try:
@@ -23,12 +22,14 @@ def lambda_handler(event, context):
         token = event.get('headers', {}).get('Authorization', '')
         lambda_client = boto3.client('lambda')
         payload_string = '{ "token": "' + token + '" }'
+        
         invoke_response = lambda_client.invoke(
             FunctionName=f"{SERVICE_NAME}-{STAGE}-ValidarTokenAcceso",
             InvocationType='RequestResponse',
             Payload=payload_string
         )
         response = json.loads(invoke_response['Payload'].read())
+        
         if response.get('statusCode') == 403:
             return {
                 'statusCode': 403,
@@ -40,8 +41,11 @@ def lambda_handler(event, context):
         if isinstance(body, str):
             body = json.loads(body)
 
-        tenant_id = body.get('tenant_id')
-        correo = body.get('correo')
+        token_data = json.loads(response.get('body', '{}')).get('data', {})
+
+        tenant_id = token_data.get('tenant_id')
+        correo = token_data.get('correo')
+        rol_usuario = token_data.get('rol')
         areas = body.get('areas', [])
 
         if not tenant_id or not correo:
@@ -49,7 +53,16 @@ def lambda_handler(event, context):
                 'statusCode': 400,
                 'body': json.dumps({
                     'status': 'error',
-                    'message': 'Faltan campos requeridos: tenant_id, correo'
+                    'message': 'El token de acceso no contiene información de identidad válida'
+                })
+            }
+        
+        if rol_usuario != 'admin':
+            return {
+                'statusCode': 403,
+                'body': json.dumps({
+                    'status': 'error',
+                    'message': 'Forbidden - Solo los administradores pueden modificar las áreas'
                 })
             }
 
@@ -62,21 +75,40 @@ def lambda_handler(event, context):
                 })
             }
 
-        # Actualizar el registro del admin
         tabla = dynamodb.Table(TABLE_USUARIOS)
+
+        # ── Validación Antifantasma: Bloquear eliminación de áreas activas ──
         
-        # Primero validamos que el usuario existe y es admin
-        existing = tabla.get_item(Key={'tenant_id': tenant_id, 'correo': correo})
-        if 'Item' not in existing or existing['Item'].get('rol') != 'admin':
+        # 1. Consultar todos los empleados pertenecientes a este tenant_id
+        resultado_empleados = tabla.query(
+            IndexName='RolIndex',
+            KeyConditionExpression='rol = :rol AND tenant_id = :tenant_id',
+            ExpressionAttributeValues={
+                ':rol': 'empleado',
+                ':tenant_id': tenant_id
+            },
+            ProjectionExpression='area'  # Optimizado: Solo descargamos el nombre del área
+        )
+        
+        empleados = resultado_empleados.get('Items', [])
+        
+        # 2. Mapear en un set único las áreas que realmente están ocupadas por los trabajadores
+        areas_en_uso = set(emp.get('area') for emp in empleados if emp.get('area'))
+        
+        # 3. Identificar si el Admin omitió (eliminó) algún área que tiene personal asignado
+        areas_conflictivas = [area_activa for area_activa in areas_en_uso if area_activa not in areas]
+        
+        # Si se detectan inconsistencias, se frena el proceso enviando un mensaje claro
+        if areas_conflictivas:
             return {
-                'statusCode': 403,
+                'statusCode': 400,
                 'body': json.dumps({
                     'status': 'error',
-                    'message': 'Usuario no encontrado o no tiene rol de admin'
+                    'message': f'No puedes eliminar las siguientes áreas porque tienen empleados asignados: {", ".join(areas_conflictivas)}. Reasigna a tu personal antes de quitarlas del catálogo.'
                 })
             }
 
-        # Actualizar las áreas
+        # ── Actualizar las áreas en DynamoDB ───────────────────────────
         tabla.update_item(
             Key={'tenant_id': tenant_id, 'correo': correo},
             UpdateExpression='SET areas = :areas',

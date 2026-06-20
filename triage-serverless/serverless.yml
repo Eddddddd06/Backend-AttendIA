@@ -1,6 +1,6 @@
 service: triage-serverless
 
-frameworkVersion: '3'
+frameworkVersion: '4'
 
 provider:
   name: aws
@@ -15,26 +15,15 @@ provider:
     SERVICE_NAME: ${self:service}
     STAGE: ${self:provider.stage}
 
-  iamRoleStatements:
-    - Effect: "Allow"
-      Action:
-        - "dynamodb:*"
-      Resource: "*"
-    - Effect: "Allow"
-      Action:
-        - "sqs:*"
-      Resource: "*"
-    - Effect: "Allow"
-      Action:
-        - "lambda:InvokeFunction"
-      Resource: "*"
+  iam:
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
 
 functions:
   # ─────────────────────────────────────────────────────────────────────────
-  # AUTH
+  # AUTH & USUARIOS
   # ─────────────────────────────────────────────────────────────────────────
 
-  # Público: El Admin se registra con nombre_empresa (crea tenant)
+  # PÚBLICO para Admin / PRIVADO para creación de Empleados
   CrearUsuario:
     handler: src/auth/crear_usuario.lambda_handler
     events:
@@ -76,6 +65,27 @@ functions:
                   "body": $input.body
                 }
 
+  # PRIVADO: Destruye la sesión e invalida el token
+  LogoutUsuario:
+    handler: src/auth/logout.lambda_handler
+    events:
+      - http:
+          path: /auth/logout
+          method: post
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
   # Interna: Solo se invoca lambda-to-lambda, pero exponemos endpoint para tests
   ValidarTokenAcceso:
     handler: src/auth/validar_token.lambda_handler
@@ -97,7 +107,7 @@ functions:
                   "body": $input.body
                 }
 
-  # PRIVADO: El admin actualiza sus áreas
+  # PRIVADO: El admin actualiza sus áreas (Bloquea borrado si hay empleados activos)
   ActualizarAreas:
     handler: src/auth/actualizar_areas.lambda_handler
     events:
@@ -118,19 +128,26 @@ functions:
                   "body": $input.body
                 }
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # EMPRESAS
-  # ─────────────────────────────────────────────────────────────────────────
-
-  # PÚBLICO: El cliente final consulta la lista de empresas para el formulario
-  ObtenerEmpresas:
-    handler: src/auth/obtener_empresas.lambda_handler
+  # PRIVADO: El admin modifica área y/o contraseña de un empleado
+  ActualizarUsuario:
+    handler: src/auth/actualizar_usuario.lambda_handler
     events:
       - http:
-          path: /empresas
-          method: get
+          path: /auth/usuarios/modificar
+          method: put
           cors: true
-          # Sin integration lambda: es público y no necesita headers de auth
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
 
   # ─────────────────────────────────────────────────────────────────────────
   # TICKETS
@@ -144,9 +161,8 @@ functions:
           path: /tickets
           method: post
           cors: true
-          # Sin integration lambda: es público y no necesita headers de auth
 
-  # PRIVADO: El Admin carga tickets masivos desde un CSV (convertido a JSON array por el front)
+  # PRIVADO: El Admin carga tickets masivos desde un CSV
   CargarCsv:
     handler: src/tickets/cargar_csv.lambda_handler
     events:
@@ -257,6 +273,7 @@ resources:
                 - nombre_empresa
                 - areas
                 - correo
+                - area          # 🌟 SOLUCIÓN: Agregado para que no falle el barrido de áreas
 
     # ─── DYNAMODB: Tokens ─────────────────────────────────────────────────
     TablaTokensAcceso:

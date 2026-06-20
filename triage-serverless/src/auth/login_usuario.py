@@ -80,6 +80,7 @@ def lambda_handler(event, context):
                 'correo': correo,
                 'rol': usuario.get('rol', 'empleado'),
                 'area': usuario.get('area', ''),
+                'nombre_empresa': usuario.get('nombre_empresa', ''),
                 'creado_en': datetime.now(timezone.utc).isoformat(),
                 'expira_en': expiration_time.isoformat(),
                 'ttl': ttl_timestamp  # DynamoDB TTL automático
@@ -97,6 +98,7 @@ def lambda_handler(event, context):
                     'correo': correo,
                     'rol': usuario.get('rol', 'empleado'),
                     'area': usuario.get('area', ''),
+                    'nombre_empresa': usuario.get('nombre_empresa', ''),
                     'expira_en': expiration_time.isoformat()
                 }
             })
