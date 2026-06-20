@@ -1,0 +1,313 @@
+service: triage-serverless
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: us-east-1
+  stage: dev
+  environment:
+    DYNAMODB_USUARIOS_TABLE: t_usuarios
+    DYNAMODB_TOKENS_TABLE: t_tokens_acceso
+    DYNAMODB_TICKETS_TABLE: t_tickets
+    SQS_QUEUE_URL: !Ref TicketsQueue
+    SERVICE_NAME: ${self:service}
+    STAGE: ${self:provider.stage}
+
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - "dynamodb:*"
+      Resource: "*"
+    - Effect: "Allow"
+      Action:
+        - "sqs:*"
+      Resource: "*"
+    - Effect: "Allow"
+      Action:
+        - "lambda:InvokeFunction"
+      Resource: "*"
+
+functions:
+  # ─────────────────────────────────────────────────────────────────────────
+  # AUTH
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # Público: El Admin se registra con nombre_empresa (crea tenant)
+  CrearUsuario:
+    handler: src/auth/crear_usuario.lambda_handler
+    events:
+      - http:
+          path: /auth/usuarios
+          method: post
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # Público: Login de Admin o Empleado → retorna token
+  LoginUsuario:
+    handler: src/auth/login_usuario.lambda_handler
+    events:
+      - http:
+          path: /auth/login
+          method: post
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # Interna: Solo se invoca lambda-to-lambda, pero exponemos endpoint para tests
+  ValidarTokenAcceso:
+    handler: src/auth/validar_token.lambda_handler
+    events:
+      - http:
+          path: /auth/validar
+          method: post
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # PRIVADO: El admin actualiza sus áreas
+  ActualizarAreas:
+    handler: src/auth/actualizar_areas.lambda_handler
+    events:
+      - http:
+          path: /auth/empresas/areas
+          method: put
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # EMPRESAS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # PÚBLICO: El cliente final consulta la lista de empresas para el formulario
+  ObtenerEmpresas:
+    handler: src/auth/obtener_empresas.lambda_handler
+    events:
+      - http:
+          path: /empresas
+          method: get
+          cors: true
+          # Sin integration lambda: es público y no necesita headers de auth
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # TICKETS
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # PÚBLICO: El cliente final envía su queja sin token
+  CrearTicket:
+    handler: src/tickets/crear_ticket.lambda_handler
+    events:
+      - http:
+          path: /tickets
+          method: post
+          cors: true
+          # Sin integration lambda: es público y no necesita headers de auth
+
+  # PRIVADO: El Admin carga tickets masivos desde un CSV (convertido a JSON array por el front)
+  CargarCsv:
+    handler: src/tickets/cargar_csv.lambda_handler
+    events:
+      - http:
+          path: /tickets/csv
+          method: post
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
+
+  # PRIVADO SQS: Clasificación automática, disparada por la cola
+  ClasificarTicket:
+    handler: src/tickets/clasificar_ticket.lambda_handler
+    events:
+      - sqs:
+          arn: !GetAtt TicketsQueue.Arn
+          batchSize: 1
+
+  # PRIVADO: El Empleado/Admin consulta los tickets de su área
+  ObtenerTickets:
+    handler: src/tickets/obtener_tickets.lambda_handler
+    events:
+      - http:
+          path: /tickets
+          method: get
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body,
+                  "queryStringParameters": {
+                    "tenant_area": "$input.params('tenant_area')",
+                    "tenant_id": "$input.params('tenant_id')"
+                  }
+                }
+
+  # PRIVADO: El Empleado/Admin resuelve un ticket
+  ResolverTicket:
+    handler: src/tickets/resolver_ticket.lambda_handler
+    events:
+      - http:
+          path: /tickets/{ticket_id}/resolver
+          method: put
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body,
+                  "pathParameters": {
+                    "ticket_id": "$input.params('ticket_id')"
+                  }
+                }
+
+resources:
+  Resources:
+    # ─── DYNAMODB: Usuarios ───────────────────────────────────────────────
+    TablaUsuarios:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: t_usuarios
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: tenant_id
+            AttributeType: S
+          - AttributeName: correo
+            AttributeType: S
+          - AttributeName: rol
+            AttributeType: S
+        KeySchema:
+          - AttributeName: tenant_id
+            KeyType: HASH
+          - AttributeName: correo
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: RolIndex
+            KeySchema:
+              - AttributeName: rol
+                KeyType: HASH
+              - AttributeName: tenant_id
+                KeyType: RANGE
+            Projection:
+              ProjectionType: INCLUDE
+              NonKeyAttributes:
+                - nombre_empresa
+                - areas
+                - correo
+
+    # ─── DYNAMODB: Tokens ─────────────────────────────────────────────────
+    TablaTokensAcceso:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: t_tokens_acceso
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: token
+            AttributeType: S
+        KeySchema:
+          - AttributeName: token
+            KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+
+    # ─── DYNAMODB: Tickets ────────────────────────────────────────────────
+    TablaTickets:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: t_tickets
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: tenant_id
+            AttributeType: S
+          - AttributeName: ticket_id
+            AttributeType: S
+          - AttributeName: tenant_area
+            AttributeType: S
+          - AttributeName: score
+            AttributeType: N
+        KeySchema:
+          - AttributeName: tenant_id
+            KeyType: HASH
+          - AttributeName: ticket_id
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: AreaScoreIndex
+            KeySchema:
+              - AttributeName: tenant_area
+                KeyType: HASH
+              - AttributeName: score
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+    # ─── SQS: Cola de tickets ─────────────────────────────────────────────
+    TicketsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: TicketsQueue
+        VisibilityTimeout: 60
+        MessageRetentionPeriod: 86400  # 24 horas
