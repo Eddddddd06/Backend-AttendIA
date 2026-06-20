@@ -74,9 +74,9 @@ def lambda_handler(event, context):
             )
         else:
             # Query por PK principal (Asumiendo que tenant_id es la partición principal de tu tabla)
+            tenant_id_clean = tenant_id.strip()
             result = tabla_tickets.query(
-                KeyConditionExpression='tenant_id = :tid',
-                ExpressionAttributeValues={':tid': tenant_id}
+                KeyConditionExpression=boto3.dynamodb.conditions.Key('tenant_id').eq(tenant_id_clean)
             )
 
         tickets = result.get('Items', [])
