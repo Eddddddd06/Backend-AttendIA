@@ -247,7 +247,7 @@ functions:
   EnviarCorreoNotificacion:
       handler: src/tickets/enviar_email.lambda_handler
       environment:
-        RESEND_API_KEY: ${RESEND_API_KEY} # Tu token de Resend
+        RESEND_API_KEY: ${env.RESEND_API_KEY} # Tu token de Resend
       events:
         - sns:
             arn: !Ref TicketsResueltosTopic # 🌟 Serverless Framework la suscribe al tópico automáticamente
