@@ -24,7 +24,6 @@ Como propuesta diferencial, para cada correo que ya ha sido respondido, se utili
 | Fecha de envío | En qué momento fue enviado el correo y cuánto tiempo ha pasado sin recibir respuesta |
 | Emisor | Si el emisor es una persona jurídica o natural, para identificar posibles alianzas o inversiones |
 | Palabras clave | Términos como pagos, fechas límite, entre otros |
-| Historial de respuestas | Si la empresa ya había respondido previamente algún correo de ese emisor |
 
 ## Flujo principal de la aplicación
 
