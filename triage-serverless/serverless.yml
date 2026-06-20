@@ -17,7 +17,7 @@ provider:
 
   # Rol administrado de AWS Academy Lab que hereda todos los permisos necesarios
   iam:
-    role: arn:aws:iam::943641746965:role/LabRole
+    role: arn:aws:iam::${aws:accountId}:role/LabRole
 
 functions:
   # ─────────────────────────────────────────────────────────────────────────
