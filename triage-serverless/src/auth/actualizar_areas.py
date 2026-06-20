@@ -82,8 +82,7 @@ def lambda_handler(event, context):
         # 1. Consultar todos los empleados pertenecientes a este tenant_id
         resultado_empleados = tabla.query(
             IndexName='RolIndex',
-            KeyConditionExpression='rol = :rol',
-            FilterExpression='tenant_id = :tenant_id',
+            KeyConditionExpression='rol = :rol AND tenant_id = :tenant_id',
             ExpressionAttributeValues={
                 ':rol': 'empleado',
                 ':tenant_id': tenant_id
