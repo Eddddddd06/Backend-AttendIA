@@ -97,15 +97,16 @@ Cada área de trabajo puede revisar todos los tickets que tiene asignados, ya cl
 
 **ResolverTicket** — Recibe del usuario del área de trabajo un body con `tenant_id`, el comentario o respuesta, y el destinatario. Cambia el estado del ticket de pendiente a resuelto, y envía un correo al emisor original notificando que su solicitud fue resuelta, incluyendo el mensaje brindado por el área encargada.
 
-**Cargar_csv** — Actualiza la lista de áreas de trabajo de una empresa en la tabla `t_usuarios`. Primero valida el token mediante una invocación Lambda-to-Lambda al servicio de autenticación, luego verifica en DynamoDB que el solicitante exista y tenga estrictamente el rol `admin`. Tras superar ambos filtros y validar el formato de lista, ejecuta un `update_item` sobre el campo `areas`, respondiendo con HTTP 200.
+**Cargar_csv**: Este Lambda permite a un administrador cargar un lote de tickets para su procesamiento. Inicia validando el token internamente para asegurar que el usuario tenga el rol de "admin" y heredar su tenant_id. Tras comprobar que el archivo no exceda el límite de seguridad (100 tickets) y verificar la longitud de cada descripción, genera un identificador único (UUID) por registro y lo encola de forma asíncrona en Amazon SQS. Finaliza retornando un HTTP 200 con un resumen exacto de los tickets encolados y los errores detectados.
 
-**Clasificar_ticket** — Actualiza la lista de áreas de trabajo de una empresa en la tabla `t_usuarios`. Primero valida el token mediante una invocación Lambda-to-Lambda al servicio de autenticación, luego verifica en DynamoDB que el solicitante exista y tenga estrictamente el rol `admin`. Tras superar ambos filtros y validar el formato de lista, ejecuta un `update_item` sobre el campo `areas`, respondiendo con HTTP 200.
+**Clasificar_ticket**: Este Lambda es consumido automáticamente por la cola SQS para procesar tickets de forma individual. Primero, consulta en DynamoDB el catálogo de áreas disponibles para esa empresa específica. Luego, envía el contenido del ticket a la inteligencia artificial (Groq/Llama-3) mediante un prompt estricto, logrando que la IA devuelva el área asignada y un score de urgencia (1-100) en formato JSON. Finalmente, traduce el score a una prioridad legible y guarda el ticket clasificado en DynamoDB bajo una estructura multi-tenant.
 
-**Mostrar Empleados** — Actualiza la lista de áreas de trabajo de una empresa en la tabla `t_usuarios`. Primero valida el token mediante una invocación Lambda-to-Lambda al servicio de autenticación, luego verifica en DynamoDB que el solicitante exista y tenga estrictamente el rol `admin`. Tras superar ambos filtros y validar el formato de lista, ejecuta un `update_item` sobre el campo `areas`, respondiendo con HTTP 200.
+**Enviar_email**: Este Lambda se encarga de despachar correos electrónicos a los clientes utilizando la API de Resend. Cuenta con soporte nativo para Amazon SNS; si detecta que el evento llega encapsulado en una notificación, lo desempaqueta de inmediato para extraer el JSON real. Una vez identificados el destinatario, el asunto y el cuerpo del mensaje, ejecuta la petición a través del SDK oficial de Resend y retorna un HTTP 200 con el ID de confirmación del envío.
+
 
 ## Arquitectura
 
-_(Diagrama de arquitectura pendiente de incluir)_
+<img width="1183" height="636" alt="image" src="https://github.com/user-attachments/assets/e1496534-03dd-4b73-b519-504a19e67cc0" />
 
 ## Despliegue
 
