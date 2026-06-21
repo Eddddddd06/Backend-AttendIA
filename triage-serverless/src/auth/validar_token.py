@@ -7,13 +7,7 @@ TABLE_TOKENS = os.environ.get('DYNAMODB_TOKENS_TABLE', 't_tokens_acceso')
 
 
 def lambda_handler(event, context):
-    """
-    Valida si un token existe en t_tokens_acceso.
-    Puede recibir el token desde:
-      - event['token']  (invocación directa lambda-to-lambda)
-      - event['body']['token'] (API Gateway)
-      - event['headers']['Authorization'] (API Gateway con header)
-    """
+    
     try:
         token = None
 
