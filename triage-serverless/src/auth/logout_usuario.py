@@ -7,13 +7,7 @@ TABLE_TOKENS = os.environ.get('DYNAMODB_TOKENS_TABLE', 't_tokens_acceso')
 
 
 def lambda_handler(event, context):
-    """
-    Cierra la sesión del usuario invalidando su token.
-    Puede recibir el token desde:
-      - event['token']                     (Invocación directa)
-      - event['body']['token']             (API Gateway Body JSON)
-      - event['headers']['Authorization']   (API Gateway Header)
-    """
+    
     try:
         token = None
 
