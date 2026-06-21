@@ -3,7 +3,6 @@ import json
 import os
 from decimal import Decimal
 
-# Los clientes se inicializan ARRIBA (Globales) para optimizar velocidad
 dynamodb = boto3.resource('dynamodb')
 lambda_client = boto3.client('lambda') 
 
@@ -22,10 +21,8 @@ class DecimalEncoder(json.JSONEncoder):
 
 def lambda_handler(event, context):
     try:
-        # ── Inicio: Proteger el Lambda (Seguro contra inyecciones) ─────
         token = event.get('headers', {}).get('Authorization', '')
         
-        # json.dumps evita que rompan el formato del payload
         payload_data = { "token": token }
         
         invoke_response = lambda_client.invoke(
@@ -40,9 +37,7 @@ def lambda_handler(event, context):
                 'statusCode': 403,
                 'body': json.dumps({'status': 'Forbidden - Acceso No Autorizado'})
             }
-        # ── Fin: Proteger el Lambda ─────────────────────────────────────
 
-        # Leer query string params o body
         query_params = event.get('queryStringParameters') or {}
         body = event.get('body', {})
         if isinstance(body, str) and body:
@@ -65,15 +60,13 @@ def lambda_handler(event, context):
         tabla_tickets = dynamodb.Table(TABLE_TICKETS)
 
         if tenant_area:
-            # Query por GSI AreaScoreIndex → ordenado por score desc
             result = tabla_tickets.query(
                 IndexName='AreaScoreIndex',
                 KeyConditionExpression='tenant_area = :ta',
                 ExpressionAttributeValues={':ta': tenant_area},
-                ScanIndexForward=False  # score descendente (más urgente primero)
+                ScanIndexForward=False 
             )
         else:
-            # Query por PK principal (Asumiendo que tenant_id es la partición principal de tu tabla)
             tenant_id_clean = tenant_id.strip()
             result = tabla_tickets.query(
                 KeyConditionExpression=boto3.dynamodb.conditions.Key('tenant_id').eq(tenant_id_clean)
