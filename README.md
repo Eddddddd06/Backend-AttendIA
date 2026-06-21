@@ -97,7 +97,25 @@ _(Diagrama de arquitectura pendiente de incluir)_
 
 ## Despliegue
 
-> ⚠️ Esta sección está incompleta en la documentación original — pendiente de definir el nombre de la variable de entorno y el comando de despliegue exacto.
+1. Fase de despliegue del backend.
+   Este proyecto cuenta con un archivo requirements.txt el cual se tiene que ejecutar pues están presentes los módulos necesarios para el correcto funcionamiento del backend sobre todo para utilizar el modelo de LLM. Además se tienen que incluir estas variables que son las credenciales de las APIs que se están utilizando.
+   
+   ```bash
+     pip3 install -r requirements.txt -t .
+   ```
+   
+   Para desplegar el backend cabe aclarar que este tiene dos archivos importantes, los cuales son serverless.yml y requeriments.txt. En primer lugar, cabe
+   aclarar que para poder hacer despliegues en awsacademy, nosotros utilizamos LabRole para administrar, crear y configurar una amplia variedad de servicios en la consola de AWS. En nuestro caso para crear las tablas DynamoDB, pilas en CloudFormation, lambdas y ApiGateway.
+   El apartado `role: arn:aws:iam::${aws:accountId}:role/LabRole` la variable accountId recibe el Id de la cuenta Aws que está ejecutando en ese momento para utilizar el rol "LabRole". Luego de manera interna asigna en environment los nombres que van a utilizar las distintas tablas DynamoDB. Seguidamente cada parte del serverless.yml inicializa los lambdas con los cuales va a trabajar el backend y asigna sus respectivos caminos. Cada uno tiene un request, donde se le asigna una plantilla `application/json` que será la forma en que Amazon API Gateway, en lugar de enviar una petición HTTP cruda directamente a AWS Lambda, le indique que información específica necesita y la arme en un formato JSON limpio y estructurado.
+   Para correr este comando se necesita tener serverless instalado, los comandos necesarios son:
 
-1. Editar la variable de entorno: `<pendiente de especificar>`
-2. Ejecutar el comando de despliegue: `<pendiente de especificar>`
+   ```bash
+     sudo npm install -g serverless
+     serverless login
+     sls deploy
+   ```
+    
+3. Fase de despliegue del frontend.
+
+   Al estar desplegado en Amplify solo es crear una applicación dentro del servicio de AWS Amplify y alojar lo que hay en el repositorio de Frontend de AttendIA.
+   
