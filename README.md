@@ -136,8 +136,8 @@ Este proyecto cuenta con un archivo `requirements.txt` el cual se tiene que ejec
 
 ```bash
 pip3 install -r requirements.txt -t .
-EXPORT RESEND_API_KEY=
-EXPORT GROQ_API_KEY=
+export RESEND_API_KEY=
+export GROQ_API_KEY=
 ```
 
 Para desplegar el backend cabe aclarar que este tiene dos archivos importantes, los cuales son `serverless.yml` y `requirements.txt`. En primer lugar, cabe aclarar que para poder hacer despliegues en AWS Academy, nosotros utilizamos `LabRole` para administrar, crear y configurar una amplia variedad de servicios en la consola de AWS. En nuestro caso para crear las tablas DynamoDB, pilas en CloudFormation, lambdas y ApiGateway.
