@@ -17,11 +17,9 @@ def lambda_handler(event, context):
     try:
         token = None
 
-        # 1. Intentar obtener el token desde invocación directa
         if 'token' in event:
             token = event['token']
 
-        # 2. Intentar obtener el token desde el Body
         if not token:
             body = event.get('body', {})
             if isinstance(body, str):
@@ -29,11 +27,9 @@ def lambda_handler(event, context):
             if isinstance(body, dict):
                 token = body.get('token')
 
-        # 3. Intentar obtener el token desde la cabecera Authorization
         if not token:
             token = event.get('headers', {}).get('Authorization', '')
 
-        # Si no se proporcionó ningún token, no podemos cerrar nada
         if not token:
             return {
                 'statusCode': 400,
@@ -43,12 +39,9 @@ def lambda_handler(event, context):
                 })
             }
 
-        # Conectar a la tabla de sesiones
         tabla_tokens = dynamodb.Table(TABLE_TOKENS)
 
-        # 🌟 EL TRUCO: Borramos el token de la base de datos de inmediato.
-        # Nota: "delete_item" en DynamoDB es genial porque si el token ya no existía 
-        # (o ya se había borrado por el TTL), no explota; simplemente responde con éxito.
+        
         tabla_tokens.delete_item(
             Key={'token': token}
         )
