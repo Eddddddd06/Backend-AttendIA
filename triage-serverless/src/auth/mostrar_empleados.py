@@ -11,9 +11,7 @@ def lambda_handler(event, context):
     Lista todos los empleados registrados en la empresa del admin.
     """
     try:
-        # ── PASO 1: Obtener token ─────────────────────────────────────
         token = event.get('headers', {}).get('Authorization', '')
-        # ── PASO 2: Validar token (igual que actualizar_areas.py) ────
         lambda_client = boto3.client('lambda')
         payload_string = '{ "token": "' + token + '" }'
         invoke_response = lambda_client.invoke(
@@ -30,7 +28,6 @@ def lambda_handler(event, context):
         token_data = json.loads(response.get('body', '{}')).get('data', {})
         tenant_id = token_data.get('tenant_id')
         rol_usuario = token_data.get('rol')
-        # ── PASO 3: Solo admin ────────────────────────────────────────
         if rol_usuario != 'admin':
             return {
                 'statusCode': 403,
@@ -44,7 +41,6 @@ def lambda_handler(event, context):
                 'statusCode': 400,
                 'body': json.dumps({'status': 'error', 'message': 'Token sin tenant_id válido'})
             }
-        # ── PASO 4: Consultar empleados en DynamoDB ───────────────────
         tabla = dynamodb.Table(TABLE_USUARIOS)
         resultado = tabla.query(
             IndexName='RolIndex',
@@ -62,12 +58,10 @@ def lambda_handler(event, context):
                 'rol': item.get('rol', 'empleado'),
                 'nombre_empresa': item.get('nombre_empresa', '')
             })
-        # ── PASO 5: Traer también las áreas del admin ───────────────
         admin_item = tabla.get_item(
             Key={'tenant_id': tenant_id, 'correo': token_data.get('correo', '')}
         ).get('Item', {})
         areas = admin_item.get('areas', [])
-        # ── PASO 6: Respuesta ─────────────────────────────────────────
         return {
             'statusCode': 200,
             'body': json.dumps({
