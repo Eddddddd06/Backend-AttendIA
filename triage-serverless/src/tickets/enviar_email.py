@@ -2,22 +2,18 @@ import resend
 import json
 import os
 
-# 🛠️ Buenas prácticas: Inicializar el cliente usando la API Key de las variables de entorno
 resend.api_key = os.environ.get('RESEND_API_KEY')
 
 def lambda_handler(event, context):
     try:
         print(f"[INFO] Evento crudo recibido desde el disparador: {json.dumps(event)}")
         
-        # 🌟 SOPORTE PARA SNS: Si el evento viene encapsulado por SNS, extraemos el mensaje interno
         if "Records" in event:
             print("[INFO] Detectado evento originado en AWS SNS. Desempaquetando payload...")
             sns_message = event["Records"][0]["Sns"]["Message"]
-            event = json.loads(sns_message) # Sobrescribimos el evento con el JSON real del ticket
+            event = json.loads(sns_message) 
             print(f"[INFO] Payload de ticket extraído con éxito: {json.dumps(event)}")
-        # ─────────────────────────────────────────────────────────────────────────────────
 
-        # Extraemos los campos del evento de forma segura
         to_email = event.get('to_email')
         subject = event.get('subject', 'Actualización de tu Ticket')
         body_content = event.get('body_content', 'Tu ticket ha sido actualizado.')
@@ -29,8 +25,7 @@ def lambda_handler(event, context):
                 'body': json.dumps({'status': 'error', 'message': 'Falta el correo de destino.'})
             }
 
-        # Configuración de parámetros para la API de Resend
-        # Nota: 'onboarding@resend.dev' es el remitente gratuito por defecto de Resend
+       
         params = {
             "from": "AttendIA <onboarding@resend.dev>",
             "to": [to_email],
@@ -40,7 +35,6 @@ def lambda_handler(event, context):
 
         print(f"[INFO] Enviando correo a {to_email} a través de la API de Resend...")
         
-        # Invocación oficial del SDK de Resend
         email = resend.Emails.send(params)
         email_id = email.get('id')
         
