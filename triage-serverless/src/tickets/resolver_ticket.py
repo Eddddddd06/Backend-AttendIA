@@ -3,15 +3,13 @@ import json
 import os
 from datetime import datetime, timezone
 
-# 🛠️ Buenas prácticas: Clientes globales para optimizar recursos
 dynamodb = boto3.resource('dynamodb')
 lambda_client = boto3.client('lambda')
-sns_client = boto3.client('sns') # 🌟 Agregamos cliente nativo de SNS
+sns_client = boto3.client('sns') 
 
 TABLE_TICKETS = os.environ.get('DYNAMODB_TICKETS_TABLE', 't_tickets')
 SERVICE_NAME = os.environ.get('SERVICE_NAME', 'triage-serverless')
 STAGE = os.environ.get('STAGE', 'dev')
-# 🌟 Variable de entorno que guardará el ARN del Tópico SNS
 TICKETS_TOPIC_ARN = os.environ.get('TICKETS_SNS_TOPIC_ARN')
 
 
@@ -25,10 +23,8 @@ def lambda_handler(event, context):
         ticket_id  - ID del ticket a resolver (también acepta path param)
     """
     try:
-        # ── Inicio: Proteger el Lambda (Seguro contra Inyecciones) ──────
         token = event.get('headers', {}).get('Authorization', '')
         
-        # Usamos json.dumps para sanitizar el payload
         payload_auth = { "token": token }
         
         invoke_response = lambda_client.invoke(
@@ -43,16 +39,12 @@ def lambda_handler(event, context):
                 'statusCode': 403,
                 'body': json.dumps({'status': 'Forbidden - Acceso No Autorizado'})
             }
-        # ── Fin: Proteger el Lambda ─────────────────────────────────────
-
-        # Parsear body
         body = event.get('body', {})
         if isinstance(body, str) and body:
             body = json.loads(body)
         elif not isinstance(body, dict):
             body = {}
 
-        # ticket_id puede venir del path (/tickets/{ticket_id}/resolver)
         path_params = event.get('pathParameters') or {}
         ticket_id = path_params.get('ticket_id') or body.get('ticket_id')
         tenant_id = body.get('tenant_id')
@@ -68,7 +60,6 @@ def lambda_handler(event, context):
 
         tabla_tickets = dynamodb.Table(TABLE_TICKETS)
 
-        # Verificar que el ticket existe antes de actualizar
         existing = tabla_tickets.get_item(
             Key={'tenant_id': tenant_id, 'ticket_id': ticket_id}
         )
@@ -83,7 +74,6 @@ def lambda_handler(event, context):
 
         ticket_item = existing['Item']
 
-        # Verificar que no esté ya resuelto
         estado_actual = ticket_item.get('estado', '')
         if estado_actual == 'Resuelto':
             return {
@@ -94,11 +84,9 @@ def lambda_handler(event, context):
                 })
             }
 
-        # Extraer el correo del emisor original para notificarle
         correo_emisor = ticket_item.get('Contacto') or ticket_item.get('correo') or ticket_item.get('email')
         nombre_emisor = ticket_item.get('Nombre', 'Usuario')
 
-        # Actualizar estado a 'Resuelto'
         resuelto_en = datetime.now(timezone.utc).isoformat()
         tabla_tickets.update_item(
             Key={'tenant_id': tenant_id, 'ticket_id': ticket_id},
@@ -112,7 +100,6 @@ def lambda_handler(event, context):
 
         print(f"[OK] resolver_ticket - Ticket {ticket_id} del tenant {tenant_id} resuelto.")
 
-        # ── Inicio: Publicación Orientada a Eventos en SNS ────────────────────────
         if correo_emisor:
             payload_evento = {
                 "to_email": correo_emisor,
@@ -121,7 +108,6 @@ def lambda_handler(event, context):
             }
             
             try:
-                # 🚀 Publicamos el mensaje en el canal común (Tópico SNS)
                 sns_client.publish(
                     TopicArn=TICKETS_TOPIC_ARN,
                     Message=json.dumps(payload_evento),
@@ -129,11 +115,9 @@ def lambda_handler(event, context):
                 )
                 print(f"[INFO] Evento de resolución publicado exitosamente en SNS para: {correo_emisor}")
             except Exception as sns_err:
-                # El negocio no se frena si la mensajería externa tiene demoras
                 print(f"[WARNING] No se pudo publicar el evento en SNS: {sns_err}")
         else:
             print("[WARNING] No se encontró correo para lanzar el evento de notificación.")
-        # ── Fin: Publicación Orientada a Eventos en SNS ───────────────────────────
 
         return {
             'statusCode': 200,
