@@ -83,6 +83,12 @@ Cada área de trabajo puede revisar todos los tickets que tiene asignados, ya cl
 
 **Actualizar_Areas** — Actualiza la lista de áreas de trabajo de una empresa en la tabla `t_usuarios`. Primero valida el token mediante una invocación Lambda-to-Lambda al servicio de autenticación, luego verifica en DynamoDB que el solicitante exista y tenga estrictamente el rol `admin`. Tras superar ambos filtros y validar el formato de lista, ejecuta un `update_item` sobre el campo `areas`, respondiendo con HTTP 200.
 
+**Actualizar_Usuario** — Actualiza los valores de un Usuario que ha sido registrado por la empresa, previa validación del token de acceso. Si la petición de actualizar Usuario lo hace alguien que no es `admin` responde con HTTP 403. Caso contrario verifica que los campos hayan sido llenados correctamente y los modifica de forma dinámica dentro de la tabla Dynamo. Cuando todo los campos se completan responde con HTTP 200
+
+**Logout_Usuario** — Extrae el token de sesión desde tres posibles orígenes, priorizando en ese orden. Una vez obtenido, ejecuta un `delete_item` sobre la tabla de tokens para invalidar la sesión de inmediato, el Lambda responde con HTTP 200 incluso si el token ya no existía por ejemplo, si ya había expirado.
+
+**Mostrar Empleados** — Tras validar el token solicitante tiene estrictamente el rol `admin`, consulta en DynamoDB todos los usuarios con rol empleado pertenecientes al tenant_id del `admin`, usando el índice RolIndex. Por cada empleado devuelve su correo, área asignada, rol y nombre de empresa, y además recupera las áreas configuradas por el propio admin para incluirlas en la respuesta. Responde con HTTP 200 junto con el total de empleados encontrados y el listado completo.
+
 ### Tickets
 
 **Crear_Ticket** — Registra los tickets en la tabla `t_tickets`, validando los atributos obligatorios descritos anteriormente. Tras validar el token de acceso, responde con HTTP 201 si el ticket se creó correctamente.
@@ -90,6 +96,12 @@ Cada área de trabajo puede revisar todos los tickets que tiene asignados, ya cl
 **ObtenerTicket** — Obtiene todos los tickets ya clasificados por orden de prioridad desde DynamoDB. Requiere validar el token de sesión para autorizar el acceso a los datos.
 
 **ResolverTicket** — Recibe del usuario del área de trabajo un body con `tenant_id`, el comentario o respuesta, y el destinatario. Cambia el estado del ticket de pendiente a resuelto, y envía un correo al emisor original notificando que su solicitud fue resuelta, incluyendo el mensaje brindado por el área encargada.
+
+**Cargar_csv** — Actualiza la lista de áreas de trabajo de una empresa en la tabla `t_usuarios`. Primero valida el token mediante una invocación Lambda-to-Lambda al servicio de autenticación, luego verifica en DynamoDB que el solicitante exista y tenga estrictamente el rol `admin`. Tras superar ambos filtros y validar el formato de lista, ejecuta un `update_item` sobre el campo `areas`, respondiendo con HTTP 200.
+
+**Clasificar_ticket** — Actualiza la lista de áreas de trabajo de una empresa en la tabla `t_usuarios`. Primero valida el token mediante una invocación Lambda-to-Lambda al servicio de autenticación, luego verifica en DynamoDB que el solicitante exista y tenga estrictamente el rol `admin`. Tras superar ambos filtros y validar el formato de lista, ejecuta un `update_item` sobre el campo `areas`, respondiendo con HTTP 200.
+
+**Mostrar Empleados** — Actualiza la lista de áreas de trabajo de una empresa en la tabla `t_usuarios`. Primero valida el token mediante una invocación Lambda-to-Lambda al servicio de autenticación, luego verifica en DynamoDB que el solicitante exista y tenga estrictamente el rol `admin`. Tras superar ambos filtros y validar el formato de lista, ejecuta un `update_item` sobre el campo `areas`, respondiendo con HTTP 200.
 
 ## Arquitectura
 
