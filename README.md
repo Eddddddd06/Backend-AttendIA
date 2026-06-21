@@ -12,8 +12,6 @@ Adicionalmente, una investigación de McKinsey sobre productividad laboral seña
 
 AttendIA es una plataforma desplegada en la nube cuya función principal es organizar y priorizar de forma automática la cantidad masiva de correos electrónicos que recibe una empresa, enviándolos a sus respectivas áreas de trabajo, todo esto con ayuda de Inteligencia Artificial.
 
-Como propuesta diferencial, para cada correo que ya ha sido respondido, se utiliza IA para analizar la respuesta brindada en primera instancia y elaborar una respuesta sugerida para casos similares:
-
 - Si el ticket tiene **alta urgencia**, la respuesta generada por IA no se envía automáticamente: queda pendiente de verificación por parte del usuario, quien formula la respuesta definitiva.
 - Si el ticket tiene **baja urgencia**, la respuesta sugerida sí puede enviarse, previa validación del área encargada.
 
@@ -111,10 +109,12 @@ Cada área de trabajo puede revisar todos los tickets que tiene asignados, ya cl
 ## Despliegue
 
 1. Fase de despliegue del backend.
-   Este proyecto cuenta con un archivo requirements.txt el cual se tiene que ejecutar pues están presentes los módulos necesarios para el correcto funcionamiento del backend sobre todo para utilizar el modelo de LLM. Además se tienen que incluir estas variables que son las credenciales de las APIs que se están utilizando.
+   Este proyecto cuenta con un archivo requirements.txt el cual se tiene que ejecutar pues están presentes los módulos necesarios para el correcto funcionamiento del backend sobre todo para utilizar el modelo de LLM. Además se tienen que incluir estas variables que son las credenciales de las APIs que se están utilizando. (ver documento adjunto)
    
    ```bash
-     pip3 install -r requirements.txt -t .
+   pip3 install -r requirements.txt -t .
+   EXPORT RESEND_API_KEY=
+   EXPORT GROQ_API_KEY=
    ```
    
    Para desplegar el backend cabe aclarar que este tiene dos archivos importantes, los cuales son serverless.yml y requeriments.txt. En primer lugar, cabe
