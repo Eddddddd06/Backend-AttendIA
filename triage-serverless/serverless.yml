@@ -153,6 +153,26 @@ functions:
                   },
                   "body": $input.body
                 }
+  
+  ObtenerEmpleados:
+    handler: src/auth/obtener_empleados.lambda_handler
+    events:
+      - http:
+          path: /auth/empleados
+          method: get
+          cors: true
+          integration: lambda
+          request:
+            template:
+              application/json: |
+                {
+                  "method": "$context.httpMethod",
+                  "path": "$context.path",
+                  "headers": {
+                    "Authorization": "$input.params('Authorization')"
+                  },
+                  "body": $input.body
+                }
 
   # ─────────────────────────────────────────────────────────────────────────
   # TICKETS
