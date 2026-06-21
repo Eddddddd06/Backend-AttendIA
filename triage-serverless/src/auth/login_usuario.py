@@ -9,13 +9,11 @@ dynamodb = boto3.resource('dynamodb')
 TABLE_USUARIOS = os.environ.get('DYNAMODB_USUARIOS_TABLE', 't_usuarios')
 TABLE_TOKENS = os.environ.get('DYNAMODB_TOKENS_TABLE', 't_tokens_acceso')
 
-# TTL de 8 horas para el token
 TOKEN_TTL_HOURS = 8
 
 
 def lambda_handler(event, context):
     try:
-        # Parsear body
         body = event.get('body', {})
         if isinstance(body, str):
             body = json.loads(body)
@@ -24,7 +22,6 @@ def lambda_handler(event, context):
         correo = body.get('correo')
         password = body.get('password')
 
-        # Validar campos requeridos
         if not all([tenant_id, correo, password]):
             return {
                 'statusCode': 400,
@@ -34,10 +31,8 @@ def lambda_handler(event, context):
                 })
             }
 
-        # Hash de la contraseña para comparar
         password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-        # Buscar usuario en DynamoDB
         tabla_usuarios = dynamodb.Table(TABLE_USUARIOS)
         result = tabla_usuarios.get_item(
             Key={'tenant_id': tenant_id, 'correo': correo}
@@ -45,7 +40,6 @@ def lambda_handler(event, context):
 
         usuario = result.get('Item')
 
-        # Verificar existencia y contraseña
         if not usuario:
             return {
                 'statusCode': 401,
@@ -64,14 +58,11 @@ def lambda_handler(event, context):
                 })
             }
 
-        # Generar token único con UUID
         token = str(uuid.uuid4())
 
-        # Calcular TTL (timestamp Unix para DynamoDB TTL)
         expiration_time = datetime.now(timezone.utc) + timedelta(hours=TOKEN_TTL_HOURS)
         ttl_timestamp = int(expiration_time.timestamp())
 
-        # Guardar token en t_tokens_acceso
         tabla_tokens = dynamodb.Table(TABLE_TOKENS)
         tabla_tokens.put_item(
             Item={
@@ -83,7 +74,7 @@ def lambda_handler(event, context):
                 'nombre_empresa': usuario.get('nombre_empresa', ''),
                 'creado_en': datetime.now(timezone.utc).isoformat(),
                 'expira_en': expiration_time.isoformat(),
-                'ttl': ttl_timestamp  # DynamoDB TTL automático
+                'ttl': ttl_timestamp  
             }
         )
 
