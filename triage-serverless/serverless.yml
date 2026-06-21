@@ -155,7 +155,7 @@ functions:
                 }
   
   ObtenerEmpleados:
-    handler: src/auth/obtener_empleados.lambda_handler
+    handler: src/auth/mostrar_empleados.lambda_handler
     events:
       - http:
           path: /auth/empleados
