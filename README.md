@@ -126,7 +126,7 @@ Cada área de trabajo puede revisar todos los tickets que tiene asignados, ya cl
 
 ## 🏗️ Arquitectura
 
-<img width="1183" height="636" alt="image" src="https://github.com/user-attachments/assets/e1496534-03dd-4b73-b519-504a19e67cc0" />
+<img width="1006" height="637" alt="image" src="https://github.com/user-attachments/assets/80109356-bd9e-41db-b7f8-1770a5bb0edb" />
 
 ## 🚀 Despliegue
 
