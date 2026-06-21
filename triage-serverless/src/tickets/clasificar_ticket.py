@@ -14,16 +14,11 @@ client_groq = groq.Client(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 
 def lambda_handler(event, context):
-    """
-    Trigger: SQS - TicketsQueue (batchSize: 1)
-    Procesamiento automático de tickets individuales usando IA (Groq).
-    Guarda en DynamoDB siguiendo estrictamente el formato multi-tenant requerido.
-    """
+    
     resultados = []
 
     for record in event.get('Records', []):
         try:
-            # ── Parsear mensaje de SQS ────────────────────────────────────
             message_body = json.loads(record['body'])
 
             tenant_id = message_body.get('tenant_id')
@@ -36,9 +31,7 @@ def lambda_handler(event, context):
                 print(f"[ERROR] clasificar_ticket - Mensaje malformado: {message_body}")
                 continue
 
-            # ─────────────────────────────────────────────────────────────
-            # PASO 1: Obtener las áreas disponibles para esta empresa
-            # ─────────────────────────────────────────────────────────────
+        
             tabla_usuarios = dynamodb.Table(TABLE_USUARIOS)
 
             admin_result = tabla_usuarios.query(
@@ -54,15 +47,12 @@ def lambda_handler(event, context):
             if admin_result.get('Items'):
                 areas_disponibles = admin_result['Items'][0].get('areas', [])
 
-            # Fallback seguro si la empresa no configuró áreas
             if not areas_disponibles:
                 areas_disponibles = ["Soporte Técnico", "Atención al Cliente", "Facturación"]
 
-            # ─────────────────────────────────────────────────────────────
-            # PASO 2: Integración con Inteligencia Artificial (Groq)
-            # ─────────────────────────────────────────────────────────────
+     
             area_clasificada = areas_disponibles[0]
-            score_clasificado = 50  # default seguro si la IA falla o no hay API key
+            score_clasificado = 50  
 
             if client_groq:
                 try:
@@ -121,7 +111,6 @@ def lambda_handler(event, context):
             else:
                 print("[WARN] GROQ_API_KEY no configurada. Usando área y score por defecto.")
 
-            # Banda de prioridad legible, calculada en código (no por la IA) para consistencia
             if score_clasificado >= 70:
                 prioridad = "alta"
             elif score_clasificado >= 40:
@@ -131,9 +120,7 @@ def lambda_handler(event, context):
 
             tenant_area = f"{tenant_id}#{area_clasificada}"
 
-            # ─────────────────────────────────────────────────────────────
-            # PASO 3: Guardar ticket siguiendo el FORMATO REQUERIDO
-            # ─────────────────────────────────────────────────────────────
+            
             tabla_tickets = dynamodb.Table(TABLE_TICKETS)
 
             item_ticket = {
@@ -160,7 +147,7 @@ def lambda_handler(event, context):
 
         except Exception as e:
             print(f"[ERROR] clasificar_ticket - Error crítico procesando record SQS: {e}")
-            raise e  # Lanzamos el error para que SQS maneje reintentos / DLQ
+            raise e  
     return {
         'statusCode': 200,
         'body': json.dumps({
