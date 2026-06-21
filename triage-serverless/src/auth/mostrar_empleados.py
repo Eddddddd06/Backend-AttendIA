@@ -6,10 +6,7 @@ TABLE_USUARIOS = os.environ.get('DYNAMODB_USUARIOS_TABLE', 't_usuarios')
 SERVICE_NAME = os.environ.get('SERVICE_NAME', 'triage-serverless')
 STAGE = os.environ.get('STAGE', 'dev')
 def lambda_handler(event, context):
-    """
-    PRIVADO - Requiere token válido de Administrador.
-    Lista todos los empleados registrados en la empresa del admin.
-    """
+    
     try:
         token = event.get('headers', {}).get('Authorization', '')
         lambda_client = boto3.client('lambda')
