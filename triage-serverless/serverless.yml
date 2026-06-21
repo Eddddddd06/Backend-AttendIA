@@ -15,7 +15,6 @@ provider:
     SERVICE_NAME: ${self:service}
     STAGE: ${self:provider.stage}
 
-  # Rol administrado de AWS Academy Lab que hereda todos los permisos necesarios
   iam:
     role: arn:aws:iam::${aws:accountId}:role/LabRole
 
@@ -24,11 +23,7 @@ custom:
     dockerizePip: true
 
 functions:
-  # ─────────────────────────────────────────────────────────────────────────
-  # AUTH & USUARIOS
-  # ─────────────────────────────────────────────────────────────────────────
 
-  # PÚBLICO para Admin / PRIVADO para creación de Empleados
   CrearUsuario:
     handler: src/auth/crear_usuario.lambda_handler
     events:
@@ -49,7 +44,6 @@ functions:
                   "body": $input.body
                 }
 
-  # Público: Login de Admin o Empleado → retorna token
   LoginUsuario:
     handler: src/auth/login_usuario.lambda_handler
     events:
@@ -70,7 +64,6 @@ functions:
                   "body": $input.body
                 }
 
-  # PRIVADO: Destruye la sesión e invalida el token
   LogoutUsuario:
     handler: src/auth/logout.lambda_handler
     events:
@@ -91,7 +84,6 @@ functions:
                   "body": $input.body
                 }
 
-  # Interna: Solo se invoca lambda-to-lambda, pero exponemos endpoint para tests
   ValidarTokenAcceso:
     handler: src/auth/validar_token.lambda_handler
     events:
@@ -112,7 +104,6 @@ functions:
                   "body": $input.body
                 }
 
-  # PRIVADO: El admin actualiza sus áreas (Bloquea borrado si hay empleados activos)
   ActualizarAreas:
     handler: src/auth/actualizar_areas.lambda_handler
     events:
@@ -133,7 +124,6 @@ functions:
                   "body": $input.body
                 }
 
-  # PRIVADO: El admin modifica área y/o contraseña de un empleado
   ActualizarUsuario:
     handler: src/auth/actualizar_usuario.lambda_handler
     events:
@@ -174,11 +164,7 @@ functions:
                   "body": $input.body
                 }
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # TICKETS
-  # ─────────────────────────────────────────────────────────────────────────
 
-  # PRIVADO: El Admin carga tickets masivos desde un CSV convertido a JSON array
   CargarCsv:
     handler: src/tickets/cargar_csv.lambda_handler
     events:
@@ -199,17 +185,15 @@ functions:
                   "body": $input.body
                 }
 
-  # PRIVADO SQS: Clasificación automática mediante IA, disparada por la cola
   ClasificarTicket:
     handler: src/tickets/clasificar_ticket.lambda_handler
     environment:
-      GROQ_API_KEY: ${env:GROQ_API_KEY} # 🌟 Reemplaza con tu API Key real de Groq directamente aquí
+      GROQ_API_KEY: ${env:GROQ_API_KEY} 
     events:
       - sqs:
           arn: !GetAtt TicketsQueue.Arn
           batchSize: 1 
 
-  # PRIVADO: El Empleado/Admin consulta los tickets de su área
   ObtenerTickets:
     handler: src/tickets/obtener_tickets.lambda_handler
     events:
@@ -234,11 +218,10 @@ functions:
                   }
                 }
 
-  # PRIVADO: El Empleado/Admin resuelve un ticket
   ResolverTicket:
       handler: src/tickets/resolver_ticket.lambda_handler
       environment:
-        TICKETS_SNS_TOPIC_ARN: !Ref TicketsResueltosTopic # 🌟 Le inyectamos el ARN del Tópico creado abajo
+        TICKETS_SNS_TOPIC_ARN: !Ref TicketsResueltosTopic 
       events:
         - http:
             path: /tickets/{ticket_id}/resolver
@@ -260,19 +243,17 @@ functions:
                     }
                   }
 
-  # 🌟 NUEVA FUNCIÓN AGREGADA DE MANERA CORRECTA
   EnviarCorreoNotificacion:
       handler: src/tickets/enviar_email.lambda_handler
       environment:
-        RESEND_API_KEY: ${env:RESEND_API_KEY} # Tu token de Resend
+        RESEND_API_KEY: ${env:RESEND_API_KEY} 
       events:
         - sns:
-            arn: !Ref TicketsResueltosTopic # 🌟 Serverless Framework la suscribe al tópico automáticamente
+            arn: !Ref TicketsResueltosTopic 
             topicName: TicketsResueltosTopic
 
 resources:
   Resources:
-    # ─── DYNAMODB: Usuarios ───────────────────────────────────────────────
     TablaUsuarios:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -305,7 +286,6 @@ resources:
                 - correo
                 - area          
 
-    # ─── DYNAMODB: Tokens ─────────────────────────────────────────────────
     TablaTokensAcceso:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -321,7 +301,6 @@ resources:
           AttributeName: ttl
           Enabled: true
 
-    # ─── DYNAMODB: Tickets ────────────────────────────────────────────────
     TablaTickets:
       Type: AWS::DynamoDB::Table
       Properties:
@@ -351,13 +330,12 @@ resources:
             Projection:
               ProjectionType: ALL
 
-    # ─── SQS: Cola de tickets ─────────────────────────────────────────────
     TicketsQueue:
       Type: AWS::SQS::Queue
       Properties:
         QueueName: TicketsQueue
         VisibilityTimeout: 60
-        MessageRetentionPeriod: 86400  # 24 horas de retención
+        MessageRetentionPeriod: 86400  
     TicketsResueltosTopic:
       Type: AWS::SNS::Topic
       Properties:
