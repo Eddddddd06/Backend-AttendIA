@@ -18,7 +18,6 @@ def lambda_handler(event, context):
         areas      - Lista de strings, ej: ["Ventas", "Soporte Técnico", "Cobranzas"]
     """
     try:
-        # ── Inicio: Proteger el Lambda ──────────────────────────────────
         token = event.get('headers', {}).get('Authorization', '')
         lambda_client = boto3.client('lambda')
         payload_string = '{ "token": "' + token + '" }'
@@ -35,7 +34,6 @@ def lambda_handler(event, context):
                 'statusCode': 403,
                 'body': json.dumps({'status': 'Forbidden - Acceso No Autorizado'})
             }
-        # ── Fin: Proteger el Lambda ─────────────────────────────────────
 
         body = event.get('body', {})
         if isinstance(body, str):
@@ -77,9 +75,7 @@ def lambda_handler(event, context):
 
         tabla = dynamodb.Table(TABLE_USUARIOS)
 
-        # ── Validación Antifantasma: Bloquear eliminación de áreas activas ──
         
-        # 1. Consultar todos los empleados pertenecientes a este tenant_id
         resultado_empleados = tabla.query(
             IndexName='RolIndex',
             KeyConditionExpression='rol = :rol AND tenant_id = :tenant_id',
@@ -87,18 +83,15 @@ def lambda_handler(event, context):
                 ':rol': 'empleado',
                 ':tenant_id': tenant_id
             },
-            ProjectionExpression='area'  # Optimizado: Solo descargamos el nombre del área
+            ProjectionExpression='area'  
         )
         
         empleados = resultado_empleados.get('Items', [])
         
-        # 2. Mapear en un set único las áreas que realmente están ocupadas por los trabajadores
         areas_en_uso = set(emp.get('area') for emp in empleados if emp.get('area'))
         
-        # 3. Identificar si el Admin omitió (eliminó) algún área que tiene personal asignado
         areas_conflictivas = [area_activa for area_activa in areas_en_uso if area_activa not in areas]
         
-        # Si se detectan inconsistencias, se frena el proceso enviando un mensaje claro
         if areas_conflictivas:
             return {
                 'statusCode': 400,
@@ -108,7 +101,6 @@ def lambda_handler(event, context):
                 })
             }
 
-        # ── Actualizar las áreas en DynamoDB ───────────────────────────
         tabla.update_item(
             Key={'tenant_id': tenant_id, 'correo': correo},
             UpdateExpression='SET areas = :areas',
